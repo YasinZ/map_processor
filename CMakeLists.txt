@@ -49,12 +49,12 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-   FILES
-   process_old.msg
+#add_message_files(
+#   FILES
+#   process_old.msg
 #   Message1.msg
 #   Message2.msg
-)
+#)
 
 ## Generate services in the 'srv' folder
 add_service_files(
@@ -139,12 +139,15 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(map_processor src/map_processor.cpp)
+add_dependencies(map_processor ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(map_processor ${catkin_LIBRARIES})
 
 add_executable(map_checkpoint src/map_checkpoint.cpp)
+add_dependencies(map_checkpoint ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(map_checkpoint ${catkin_LIBRARIES})
 
 add_executable(map_fetch src/map_fetch.cpp)
+add_dependencies(map_fetch ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(map_fetch ${catkin_LIBRARIES})
 #add_dependencies(${PROJECT_NAME} beginner_tutorials_generate_messages_cpp)
 

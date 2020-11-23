@@ -14,9 +14,11 @@ int main(int argc, char** argv) {
     map_processor::fetch p;
     fetch_client.call(p);
 
-    for(auto s: p.response.results){
-        ROS_INFO("%s", s.c_str());
+    for(unsigned int i = 0; i < p.response.results.size(); ++i) {
+        std::cout << p.response.results[i] << ' ' << p.response.xs[i] << ' ' << p.response.ys[i] << '\n';
     }
+
+    std::cout << std::endl;
 
     return 0;
 }

@@ -216,6 +216,8 @@ bool mapFetchCallback(map_processor::fetch::Request& req,
                            map_processor::fetch::Response& resp) {
   for(auto checkpoint: checkpoints) {
     resp.results.push_back(checkpoint.name);
+    resp.xs.push_back(checkpoint.ps->pose.position.x);
+    resp.ys.push_back(checkpoint.ps->pose.position.y);
   }
 
   return true;
