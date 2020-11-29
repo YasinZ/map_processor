@@ -4,8 +4,11 @@
 #include "nav_msgs/OccupancyGrid.h"
 #include "tf/tfMessage.h"
 #include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/Polygon.h"
 #include "map_processor/process.h"
 #include "map_processor/fetch.h"
+#include <tf/transform_datatypes.h>
+#include "map_processor/path.h"
 #include <sstream>
 #include <queue>
 #include <fstream>
@@ -14,11 +17,37 @@
 // AMCL
 nav_msgs::OccupancyGrid::ConstPtr _grid;
 geometry_msgs::PoseStamped::ConstPtr _ps;
+bool showPath = false;
 
 struct Checkpoint { std::string name; geometry_msgs::PoseStamped::ConstPtr ps; };
 struct Point { int x, y; };
 struct Node { Point pt; int dist; std::vector<Point> path; };
 std::vector<Checkpoint> checkpoints;
+Node last;
+
+typedef int16_t coord_t;
+
+tf::Transform mapToWorld (const nav_msgs::MapMetaData& info)
+{
+  tf::Transform world_to_map;
+  tf::poseMsgToTF (info.origin, world_to_map);
+  return world_to_map;
+}
+
+tf::Transform worldToMap (const nav_msgs::MapMetaData& info)
+{
+  return mapToWorld(info).inverse();
+}
+ 
+struct Cell
+{
+   Cell(const coord_t x=0, const coord_t y=0): x(x), y(y) {}
+   coord_t x;
+   coord_t y;
+ 
+   bool operator== (const Cell& c) const;
+   bool operator< (const Cell& c) const;
+};
 
 bool IsValid(int row, int col) {
   return (row >= 0) && (row < _grid->info.width) &&
@@ -30,6 +59,14 @@ int colNum[] = {0, -1, 1, 0};
 
 Node BFS(Point src, Point dest);
 
+Cell pointCell (const nav_msgs::MapMetaData& info, const geometry_msgs::Point& p)
+{
+   tf::Point pt;
+   tf::pointMsgToTF(p, pt);
+   tf::Point p2 = worldToMap(info)*pt;
+   return Cell(floor(p2.x()/info.resolution), floor(p2.y()/info.resolution));
+}
+
 void slam_out_poseCallback(const geometry_msgs::PoseStamped::ConstPtr& ps) {
   _ps = ps;
   ROS_INFO("PS %f %f %f", ps->pose.position.x, ps->pose.position.y, ps->pose.position.z);
@@ -40,64 +77,36 @@ void slam_out_poseCallback(const geometry_msgs::PoseStamped::ConstPtr& ps) {
   ROS_INFO("Width [%d] Height [%d] size [%zu]", width, height, _grid->data.size());
   ROS_INFO("Origin x [%f] y [%f] resolution [%f]", _grid->info.origin.position.x, _grid->info.origin.position.y, _grid->info.resolution);
 
-  unsigned int grid_x = (unsigned int) (ps->pose.position.x - _grid->info.origin.position.x) / _grid->info.resolution;
-  unsigned int grid_y = (unsigned int) (ps->pose.position.y - _grid->info.origin.position.y) / _grid->info.resolution;
+  Cell position = pointCell(_grid->info, _ps->pose.position);
 
-  // index = floor((x - x_origin)/resolution) + floor((y - y_origin)/resolution)*map_width
-  // x = (index % width) * resolution + x_origin
-  // y = ((index - (index % width)) / resolution) + y_origin
-  // unsigned int index = (unsigned int) (floor((ps->pose.position.x - _grid->info.origin.position.x) / _grid->info.resolution)) +
-  //                      (unsigned int) (floor((ps->pose.position.y - _grid->info.origin.position.y) / _grid->info.resolution)) * _grid->info.width;
+  ROS_INFO("Test x [%d] Test y [%d]\n", position.x, position.y);
 
-  // unsigned int _x = (unsigned int) ((index % _grid->info.width) * _grid->info.resolution + _grid->info.origin.position.x);
-  // unsigned int _y = (unsigned int) (((index - (index % _grid->info.width)) / _grid->info.resolution) + _grid->info.origin.position.y);
-
-  ROS_INFO("Grid_X x [%d] Grid_Y y [%d]", grid_x, grid_y);
-  // ROS_INFO("index [%d] _x [%d] _y [%d]", index, _x, _y);
-
-  // Node last = BFS({(int)grid_x + 10, (int)grid_y + 15}, {(int)grid_x - 60, (int)grid_y + 50});
-  // ROS_INFO("DISTANCE: %d", last.dist);
-  // ROS_INFO("LAST x: %d, y: %d", last.pt.x, last.pt.y);
-  // do {
-  //   ROS_INFO("LAST x: %d, y: %d", last->pt.x, last->pt.y);
-  //   last = last->prev;
-  // }while(last->prev != nullptr);
-  // for(Point pt: last.path) {
-  //   ROS_INFO("PATH: x %d y %d", pt.x, pt.y);
-  // }
-
-  for(int i = 0; i < width; i++) {
+  for(int i = 0; i < height; i++) {
     bool hasAny = false;
 
-    for(int j = 0; j < height; j++) {
-      int countIgnore = 0;
-      if(int(_grid->data[i * width + j]) != -1) {
+    for(int j = 0; j < width; j++) {
+      if(int(_grid->data[j * width + i]) != -1) {
         hasAny = true;
-      }
-      if(int(_grid->data[i * width + j]) == -1 && !hasAny) {
-        countIgnore++;
       }
     }
 
     if(hasAny) {
-      for(int j = 0; j < height; j++) {
-        if(i == grid_x && j == grid_y) {
-            oss << "A" << ' ';
+      oss << i << ' ';
+      for(int j = 0; j < width; j++) {
+        if(i == position.x && j == position.y) {
+            oss << "B" << ' ';
         }
 
-        if(i == grid_x + 10 && j == grid_y + 15) {
-            oss << "DDD" << ' ';
-        }
+        if(showPath) {
+          for(Point pt: last.path) {
+            if(pt.x == i && pt.y == j)
+              oss << "P" << ' ';
+          }
+        }  
 
-        if(i == grid_x - 60 && j == grid_y + 50) {
-            oss << "EEE" << ' ';
-        }
+        int value = int(_grid->data[j * width + i]);
+        oss << (value == 100 ? 1 : (value == -1 ? 2 : value)) << ' ';
 
-        // for(Point pt: last.path) {
-        //   if(pt.x == i && pt.y == j)
-        //     oss << "!" << ' ';
-        // }
-        oss << int(_grid->data[i * width + j]) << ' ';
       }
     }
 
@@ -109,7 +118,6 @@ void slam_out_poseCallback(const geometry_msgs::PoseStamped::ConstPtr& ps) {
   o << oss.str().c_str();
   o.close();
   // ROS_INFO("MAP:\n%s", oss.str().c_str());
-  ROS_INFO("END\n");
 }
 
 Node BFS(Point src, Point dest) {
@@ -158,46 +166,6 @@ Node BFS(Point src, Point dest) {
 void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr& grid)
 {
   _grid = grid;
-  {
-  // std::ostringstream oss;
-  // int height = grid->info.height;
-  // int width = grid->info.width;
-  // ROS_INFO("Width [%d] Height [%d] size [%d]", width, height, grid->data.size());
-  // ROS_INFO("Origin x [%f] y [%f] resolution [%f]", grid->info.origin.position.x, grid->info.origin.position.y, grid->info.resolution);
-
-  // for(int i = 0; i < width; i++) {
-  //   bool hasAny = false;
-
-  //   for(int j = 0; j < height; j++) {
-  //     if(int(grid->data[i * width + j]) != -1) {
-  //       hasAny = true;
-  //     }
-  //   }
-
-  //   if(hasAny) {
-  //     bool printedCharacter = false;
-  //     for(int j = 0; j < height; j++) {
-  //       if(i == 988 && j == 1036) {
-  //           oss << "ASDF" << ' ';
-  //       }
-  //       if(int(grid->data[i * width + j]) != -1) {
-  //           printedCharacter = true;
-  //           oss << int(grid->data[i * width + j]) << ' ';
-  //       }
-  //       // else {
-  //       //   oss << ' ';
-  //       // }
-  //       // if(!printedCharacter && j > 150)
-  //         // oss << ' ';
-  //     }
-  //   }
-
-  //   if(hasAny)
-  //     oss << "\n";  
-  // }
-  // ROS_INFO("MAP:\n%s", oss.str().c_str());
-  // ROS_INFO("END\n");
-  }
 }
 
 bool mapCheckpointCallback(map_processor::process::Request& req, 
@@ -205,7 +173,7 @@ bool mapCheckpointCallback(map_processor::process::Request& req,
   checkpoints.push_back( Checkpoint{req.msg, _ps} );
 
   for(auto checkpoint: checkpoints) {
-    ROS_INFO("Checkpoint name: %s", checkpoint.name.c_str());
+    // ROS_INFO("Checkpoint name: %s", checkpoint.name.c_str());
     resp.results.push_back(checkpoint.name);
   }
 
@@ -213,7 +181,7 @@ bool mapCheckpointCallback(map_processor::process::Request& req,
 }
 
 bool mapFetchCallback(map_processor::fetch::Request& req, 
-                           map_processor::fetch::Response& resp) {
+                      map_processor::fetch::Response& resp) {
   for(auto checkpoint: checkpoints) {
     resp.results.push_back(checkpoint.name);
     resp.xs.push_back(checkpoint.ps->pose.position.x);
@@ -222,6 +190,35 @@ bool mapFetchCallback(map_processor::fetch::Request& req,
 
   return true;
 }
+
+bool mapPathCallback(map_processor::path::Request& req,
+                     map_processor::path::Response& resp) {
+
+  for(auto checkpoint: checkpoints) {
+    if(checkpoint.name == req.request) {
+      Cell src = pointCell(_grid->info, _ps->pose.position);
+      Cell dest = pointCell(_grid->info, checkpoint.ps->pose.position);
+      
+      Node node = BFS(Point{src.x, src.y}, Point{dest.x, dest.y});
+      if(node.dist == -1) {
+        resp.x.push_back(-1);
+        resp.y.push_back(-1);
+        break;
+      }
+
+      last = node;
+      showPath = true;
+      for(auto p: node.path) {
+        resp.x.push_back(p.x);
+        resp.y.push_back(p.y);
+      }
+      break;
+    }
+  }
+
+  return true;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -232,8 +229,8 @@ int main(int argc, char **argv)
   ros::Subscriber sub2 = n.subscribe("slam_out_pose", 1000, slam_out_poseCallback);
   ros::ServiceServer checkpoint_server = n.advertiseService("map_checkpoint", mapCheckpointCallback);
   ros::ServiceServer fetch_server = n.advertiseService("map_fetch", mapFetchCallback);
+  ros::ServiceServer path_server = n.advertiseService("map_path", mapPathCallback);
 
-  ROS_INFO("STARTED");
   ros::spin();
 
   return 0;

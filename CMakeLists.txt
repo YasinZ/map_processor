@@ -61,6 +61,7 @@ add_service_files(
    FILES
    process.srv
    fetch.srv
+   path.srv
 #   Service1.srv
 #   Service2.srv
 )
@@ -149,6 +150,10 @@ target_link_libraries(map_checkpoint ${catkin_LIBRARIES})
 add_executable(map_fetch src/map_fetch.cpp)
 add_dependencies(map_fetch ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(map_fetch ${catkin_LIBRARIES})
+
+add_executable(map_path src/map_path.cpp)
+add_dependencies(map_path ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(map_path ${catkin_LIBRARIES})
 #add_dependencies(${PROJECT_NAME} beginner_tutorials_generate_messages_cpp)
 
 ## Rename C++ executable without prefix

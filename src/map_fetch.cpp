@@ -9,8 +9,6 @@ int main(int argc, char** argv) {
     ros::NodeHandle n;
     ros::ServiceClient fetch_client = n.serviceClient<map_processor::fetch>("map_fetch", 1000);
 
-    std::stringstream ss;
-    ss << argv[1];
     map_processor::fetch p;
     fetch_client.call(p);
 
