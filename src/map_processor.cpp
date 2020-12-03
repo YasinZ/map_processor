@@ -25,46 +25,122 @@ void save() {
     return;
   }
 
-  fprintf(out, "P6\n# CREATOR: map_saver.cpp %.3f m/pix\n%d %d\n255\n",
-          _grid->info.resolution, _grid->info.width, _grid->info.height);
+  // fprintf(out, "P6\n# CREATOR: map_saver.cpp %.3f m/pix\n%d %d\n255\n",
+  //         _grid->info.resolution, _grid->info.width, _grid->info.height);
+
+  int startX = 0, endX = _grid->info.width - 1;
   for(unsigned int y = 0; y < _grid->info.height; y++) {
     for(unsigned int x = 0; x < _grid->info.width; x++) {
       unsigned int i = x + (_grid->info.height - y - 1) * _grid->info.width;
+      if(_grid->data[i] != -1) {
+        if(startX == 0 || x < startX)
+          startX = x;
+          break;
+      }
+    }
+  }
+
+  if(startX - 10 >= 0) startX -= 10;
+  std::cout << startX << ' ' << endX << std::endl;
+
+  int prevLargest = 0;
+  for(unsigned int y = 0; y < _grid->info.height; y++) {
+    for(unsigned int x = _grid->info.width - 1; x > 0; x--) {
+      unsigned int i = x + (_grid->info.height - y - 1) * _grid->info.width;
+      if(_grid->data[i] != -1) {
+        if(x < endX)
+          endX = x;
+          break;
+      }
+    }
+
+    // std::cout << endX << std::endl;
+    if (prevLargest == 0 && endX != _grid->info.width - 1) {
+      prevLargest = endX;
+      endX = _grid->info.width - 1;
+      continue;
+    }
+
+    if(prevLargest < endX && endX != _grid->info.width - 1) {
+      prevLargest = endX;
+    }
+    endX = _grid->info.width - 1;
+  }
+
+  if(prevLargest + 10 < _grid->info.width) prevLargest += 10;
+  endX = prevLargest;
+  std::cout << startX << ' ' << endX << std::endl;
+
+  int height = 0;
+  for(unsigned int y = 0; y < _grid->info.height; y++) {
+    bool hasAny = false;
+
+    for(unsigned int x = 0; x < _grid->info.width; x++) {
+      unsigned int i = x + (_grid->info.height - y - 1) * _grid->info.width;
+      if(_grid->data[i] != -1) {
+        hasAny = true;
+      }
+    }
+
+    if(!hasAny) continue;
+    height++;
+  }
+
+  fprintf(out, "P6\n# CREATOR: map_saver.cpp %.3f m/pix\n%d %d\n255\n",
+        _grid->info.resolution, endX - startX, height);
+
+
+  for(unsigned int y = 0; y < _grid->info.height; y++) {
+    bool hasAny = false;
+
+    for(unsigned int x = startX; x < endX; x++) {
+      unsigned int i = x + (_grid->info.height - y - 1) * _grid->info.width;
+      if(_grid->data[i] != -1) {
+        hasAny = true;
+      }
+    }
+
+    if(!hasAny) continue;
+
+
+    for(unsigned int x = startX; x < endX; x++) {
+      unsigned int i = x + (_grid->info.height - y - 1) * _grid->info.width;
       if (_grid->data[i] >= 0 && _grid->data[i] <= 0) { // [0,free)
         Cell position = pointCell(_grid->info, _ps->pose.position);
-        if(position.x == x && position.y == _grid->info.height -y - 1) {
+        if(position.x == x && position.y == _grid->info.height - y - 1) {
           fputc(0, out);
           fputc(0, out);
           fputc(255, out);
           continue;
+        }
+        // } else {
+        //   fputc(254, out);
+        //   fputc(254, out);
+        //   fputc(254, out);
+        // }
+
+        if(showPath) {
+          bool found = false;
+          for(Point pt: last.path) {
+            if(pt.x == x && pt.y == _grid->info.height - y - 1) {
+              fputc(111, out);
+              fputc(222, out);
+              fputc(055, out);
+              found = true;
+              break;
+            }
+          }
+
+          if(!found) {
+            fputc(254, out);
+            fputc(254, out);
+            fputc(254, out);
+          }
         } else {
           fputc(254, out);
           fputc(254, out);
           fputc(254, out);
         }
-
-        // if(showPath) {
-        //   bool found = false;
-        //   for(Point pt: last.path) {
-        //     if(pt.x == x && pt.y == _grid->info.height - y - 1) {
-        //       fputc(111, out);
-        //       fputc(222, out);
-        //       fputc(055, out);
-        //       found = true;
-        //       break;
-        //     }
-        //   }
-
-        //   if(!found) {
-        //     fputc(254, out);
-        //     fputc(254, out);
-        //     fputc(254, out);
-        //   }
-        // } else {
-        //   fputc(111, out);
-        //   fputc(111, out);
-        //   fputc(111, out);
-        // }
       } else if (_grid->data[i] >= 100) { // (occ,255]
         fputc(000, out);
         fputc(000, out);

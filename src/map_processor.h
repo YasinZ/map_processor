@@ -89,7 +89,7 @@ Node BFS(Point src, Point dest) {
       int row = point.x + rowNum[i];
       int col = point.y + colNum[i];
 
-      if(IsValid(row, col) && _grid->data[row * _grid->info.height + col] == 0 && !visited[row][col]) 
+      if(IsValid(row, col) && _grid->data[col * _grid->info.height + row] == 0 && !visited[row][col]) 
       {
         visited[row][col] = true;
         std::vector<Point> newPath = current.path;
